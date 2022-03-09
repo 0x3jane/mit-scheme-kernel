@@ -1,4 +1,4 @@
-(define shared-env (the-environment))
+(define shared-env (nearest-repl/environment))
 
 ;; Util
 (define (make-id)

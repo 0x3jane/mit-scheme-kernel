@@ -37,8 +37,8 @@
 (define get-metadata caddr)
 (define get-content cadddr)
 
-(define ((handle env) pollitem handler socket)
-  (if (zmq-poll/event? 'pollin (zmq-pollitem/revents pollitem))
+(define ((handle env pollitems) i handler socket)
+  (if (zmq-poll/event? 'pollin (zmq-pollitem/revents pollitems i))
     (handler socket env)))
 
 (define (inspect-request  session content reply pub . env) #!unspecific)
@@ -123,7 +123,8 @@
   (define stdin-socket   (make-zmq-socket context 'router))
 
   (define sockets (list hb-socket shell-socket control-socket stdin-socket))
-  (define pollitems (make-zmq-pollitems 4 sockets))
+  (define sockets-count (length sockets))
+  (define pollitems (make-zmq-pollitems sockets-count sockets))
 
   ; (define poller-width (length sockets))
   ; (define poller (make-zmq-poller))
@@ -159,11 +160,11 @@
 
   ; (define poller-events (malloc (* (c-sizeof ""))))
   (let poll ()
-    (zmq-poll (car pollitems) (length pollitems) -1)
-    (for-each (handle env)
-     pollitems
-     handlers
-     sockets)
+    (zmq-poll pollitems sockets-count -1)
+    (for-each (handle env pollitems)
+      (iota sockets-count)
+      handlers
+      sockets)
     (poll)))
 
 (export-to listen)

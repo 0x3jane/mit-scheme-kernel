@@ -186,8 +186,8 @@
       (let iter ((i 0) (cell (zmq-message/data message)))
         (if (< i size)
           (begin
-            (c->= cell "char" (bytevector-u8-ref data i))
-            (alien-byte-increment! cell 1 'char)
+            (c->= cell "uchar" (bytevector-u8-ref data i))
+            (alien-byte-increment! cell 1 'uchar)
             (iter (1+ i) cell))
           message)))))
 
@@ -223,24 +223,23 @@
 (define (get-zmq-pollitem alien i)
   (alien-byte-increment alien (* i zmq-poll-size) 'zmq_pollitem_t))
 
-(define ((make-zmq-pollitem pollitems) i socket)
-  (let ((pollitem (get-zmq-pollitem pollitems i)))
-    (c->= pollitem "zmq_pollitem_t socket" socket)
-    (c->= pollitem "zmq_pollitem_t events" zmq-poll-event)
-    pollitem))
-
 (define (make-zmq-pollitems n sockets)
-  (map
-    (make-zmq-pollitem
-      (malloc (* n zmq-poll-size) 'zmq_pollitem_t))
-    (iota n)
-    sockets))
+  (let ((items (malloc (* n zmq-poll-size) 'zmq_pollitem_t)))
+    (for-each
+      (lambda (i socket)
+	(let ((item (get-zmq-pollitem items i)))
+	  (c->= item "zmq_pollitem_t socket" socket)
+	  (c->= item "zmq_pollitem_t events" zmq-poll-event)))
+      (iota n)
+      sockets)
+    items))
 
 (define (zmq-poll/event? event revents)
   (odd? (quotient revents (cadr (assq event zmq-poll-events)))))
 
-(define (zmq-pollitem/revents pollitem)
-  (c-> pollitem "zmq_pollitem_t revents"))
+(define (zmq-pollitem/revents pollitems i)
+  (let ((pollitem (get-zmq-pollitem pollitems i)))
+    (c-> pollitem "zmq_pollitem_t revents")))
 
 (define (zmq-poll items nitems timeout)
   (c-call "zmq_poll" items nitems timeout))
@@ -256,8 +255,8 @@
   (let iter ((i 0) (elm (copy-alien buf)))
     (if (< i len)
       (let ((char (bytevector-u8-ref data i)))
-        (c->= elm "char" char)
-        (alien-byte-increment! elm 1 'char)
+        (c->= elm "uchar" char)
+        (alien-byte-increment! elm 1 'uchar)
         (iter (1+ i) elm))
       buf)))
 
@@ -265,9 +264,9 @@
   (define data (make-bytevector len))
   (let iter ((i 0) (elm (copy-alien buf)))
     (if (< i len)
-      (let ((char (c-> elm "char")))
+      (let ((char (c-> elm "uchar")))
         (bytevector-u8-set! data i char)
-        (alien-byte-increment! elm 1 'char)
+        (alien-byte-increment! elm 1 'uchar)
         (iter (1+ i) elm))
       data)))
 
@@ -283,13 +282,12 @@
         (zmq-message/close! message)
         data)
       (begin
-        (bytevector-u8-set! data i (c-> cell "char"))
-        (alien-byte-increment! cell 1 'char)
+        (bytevector-u8-set! data i (c-> cell "uchar"))
+        (alien-byte-increment! cell 1 'uchar)
         (iter (1+ i))))))
 
 (define (receive-messages socket)
   (let next ((message (make-message)) (messages '()))
-    (c-call "zmq_msg_init" message)
     (zmq-message/init! message)
     (define size (zmq-message/receive message socket))
     (define cell (zmq-message/data message))
@@ -301,8 +299,8 @@
           (zmq-message/close! message)
           (if more (next (make-message) messages) messages))
         (begin
-          (bytevector-u8-set! data i (c-> cell "char"))
-          (alien-byte-increment! cell 1 'char)
+          (bytevector-u8-set! data i (c-> cell "uchar"))
+          (alien-byte-increment! cell 1 'uchar)
           (iter (1+ i)))))))
 
 (export-to
